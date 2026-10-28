@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AuScribe - ElevenLabs Audio Transcriber</title>
+  
+  <!-- PWA Meta Tags for Android -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#4f46e5">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="AuScribe">
+  <link rel="icon" type="image/svg+xml" href="/static/icons/icon.svg">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              400: '#818cf8',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Mobile-first polish & touch-friendly ergonomics */
+    body {
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .selectable-text {
+      user-select: text;
+    }
+    /* Custom scrollbar for transcript viewing */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(30, 41, 59, 0.5);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #475569;
+      border-radius: 3px;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.15); opacity: 0.3; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .recording-pulse {
+      animation: pulse-ring 1.8s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans pb-10 selection:bg-indigo-600 selection:text-white">
+
+  <!-- Top App Bar -->
+  <header class="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 py-3">
+    <div class="max-w-xl mx-auto flex items-center justify-between">
+      <div class="flex items-center space-x-2.5">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+          <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-1.5 leading-none">
+            AuScribe
+            <span class="text-[10px] uppercase font-semibold bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500/30">Free Tier</span>
+          </h1>
+          <p class="text-[11px] text-slate-400 mt-0.5">ElevenLabs Scribe STT</p>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-2">
+        <!-- PWA Install Button (visible when installable on Android) -->
+        <button id="installAppBtn" class="hidden text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow-sm transition">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          <span>Install</span>
+        </button>
+
+        <!-- Settings Button -->
+        <button id="openSettingsBtn" class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition" title="API Settings">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-xl w-full mx-auto px-4 pt-3 flex-1 flex flex-col space-y-4">
+
+    <!-- 1. Credit & Token Usage Monitor Card -->
+    <div id="creditCard" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm relative overflow-hidden">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center space-x-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Monthly Credit Allowance</h2>
+        </div>
+        <button id="refreshCreditsBtn" class="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 active:scale-95 transition" title="Refresh credits">
+          <svg id="refreshIcon" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span id="refreshText">Sync</span>
+        </button>
+      </div>
+
+      <div class="flex items-baseline justify-between mb-1.5">
+        <div>
+          <span id="remainingCreditsVal" class="text-2xl font-black text-white tracking-tight">--</span>
+          <span class="text-xs text-slate-400 font-medium">/ 10,000 remaining</span>
+        </div>
+        <div class="text-right">
+          <span id="usedPercentVal" class="text-xs font-semibold text-slate-300">--% used</span>
+        </div>
+      </div>
+
+      <!-- Progress bar -->
+      <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden mb-2">
+        <div id="creditProgressBar" class="h-full bg-indigo-500 rounded-full transition-all duration-500" style="width: 0%"></div>
+      </div>
+
+      <div class="flex items-center justify-between text-[11px] text-slate-400">
+        <span id="tierBadge">Plan: Free Tier</span>
+        <span id="resetDateText">Monthly Reset: --</span>
+      </div>
+    </div>
+
+    <!-- 2. Target Language Selection Card -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm">
+      <div class="flex items-center justify-between mb-2">
+        <div>
+          <label class="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
+            1. Select Language
+          </label>
+          <p class="text-[11px] text-slate-400 mt-0.5">Saves token quota & maximizes accuracy</p>
+        </div>
+        <span class="text-[11px] font-mono text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full border border-indigo-500/20" id="selectedLangTag">
+          Code: en
+        </span>
+      </div>
+
+      <!-- Language Buttons Grid -->
+      <div class="grid grid-cols-3 gap-2 mt-2">
+        <!-- English -->
+        <button type="button" data-lang="en" class="lang-btn active py-2.5 px-2 rounded-xl border border-indigo-500 bg-indigo-600/20 text-white font-medium text-xs flex flex-col items-center justify-center gap-1 transition active:scale-95 shadow-sm">
+          <span class="text-xl">🇬🇧</span>
+          <span class="font-bold">English</span>
+          <span class="text-[10px] text-slate-400">en</span>
+        </button>
+
+        <!-- Hindi -->
+        <button type="button" data-lang="hi" class="lang-btn py-2.5 px-2 rounded-xl border border-slate-700 bg-slate-800/60 text-slate-300 font-medium text-xs flex flex-col items-center justify-center gap-1 hover:border-slate-600 transition active:scale-95">
+          <span class="text-xl">🇮🇳</span>
+          <span class="font-bold">हिन्दी</span>
+          <span class="text-[10px] text-slate-400">Hindi (hi)</span>
+        </button>
+
+        <!-- Bengali -->
+        <button type="button" data-lang="bn" class="lang-btn py-2.5 px-2 rounded-xl border border-slate-700 bg-slate-800/60 text-slate-300 font-medium text-xs flex flex-col items-center justify-center gap-1 hover:border-slate-600 transition active:scale-95">
+          <span class="text-xl">🇧🇩</span>
+          <span class="font-bold">বাংলা</span>
+          <span class="text-[10px] text-slate-400">Bengali (bn)</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 3. Audio Input Section (File Upload or Mic Record) -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm">
+      <label class="text-xs font-semibold uppercase tracking-wider text-slate-400 block mb-2.5">
+        2. Audio Input
+      </label>
+
+      <!-- Source Tabs -->
+      <div class="grid grid-cols-2 bg-slate-950 p-1 rounded-xl mb-3 border border-slate-800 text-xs font-medium">
+        <button id="tabRecord" class="py-2 rounded-lg bg-indigo-600 text-white transition flex items-center justify-center gap-1.5 shadow-sm">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+          </svg>
+          <span>Live Record</span>
+        </button>
+        <button id="tabUpload" class="py-2 rounded-lg text-slate-400 hover:text-white transition flex items-center justify-center gap-1.5">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+          </svg>
+          <span>Upload File</span>
+        </button>
+      </div>
+
+      <!-- Tab View 1: Live Record -->
+      <div id="recordPanel" class="flex flex-col items-center justify-center py-4 text-center">
+        <!-- Record Button & Wave -->
+        <div class="relative mb-3 flex items-center justify-center">
+          <div id="recordRing" class="hidden absolute w-24 h-24 rounded-full bg-red-500/20 recording-pulse"></div>
+          <button id="micBtn" class="relative z-10 w-20 h-20 rounded-full bg-slate-800 border-2 border-indigo-500 hover:border-indigo-400 flex items-center justify-center shadow-lg active:scale-90 transition">
+            <svg id="micIcon" class="w-8 h-8 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+            </svg>
+          </button>
+        </div>
+
+        <div id="recordTimer" class="font-mono text-xl font-bold text-white mb-1">00:00</div>
+        <p id="recordStatus" class="text-xs text-slate-400">Tap microphone to start recording</p>
+
+        <!-- Action row when recording is finished -->
+        <div id="recordedAudioControls" class="hidden w-full mt-3 flex flex-col items-center gap-2">
+          <audio id="recordedAudioPlayer" controls class="w-full h-10 rounded-lg"></audio>
+          <button id="discardRecordBtn" class="text-xs text-red-400 hover:text-red-300 flex items-center gap-1">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Discard & Re-record
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab View 2: File Upload -->
+      <div id="uploadPanel" class="hidden">
+        <label for="audioFileInput" class="border-2 border-dashed border-slate-700 hover:border-indigo-500/60 rounded-xl p-5 flex flex-col items-center justify-center text-center cursor-pointer transition bg-slate-950/40">
+          <div class="w-12 h-12 rounded-xl bg-slate-800 text-indigo-400 flex items-center justify-center mb-2">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+            </svg>
+          </div>
+          <span id="uploadFileName" class="text-xs font-semibold text-slate-200">Tap to select audio file</span>
+          <span class="text-[11px] text-slate-400 mt-1">MP3, M4A, WAV, AAC, OGG, AMR (WhatsApp voice notes)</span>
+          <input type="file" id="audioFileInput" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.opus,.flac,.webm,.amr" class="hidden">
+        </label>
+        
+        <div id="fileAudioPreview" class="hidden mt-3">
+          <audio id="fileAudioPlayer" controls class="w-full h-10 rounded-lg"></audio>
+        </div>
+      </div>
+
+      <!-- Diarization & Settings Toggle -->
+      <div class="mt-3 pt-3 border-t border-slate-800/80 flex items-center justify-between">
+        <label class="flex items-center space-x-2 cursor-pointer">
+          <input type="checkbox" id="diarizeToggle" class="sr-only peer">
+          <div class="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 relative"></div>
+          <span class="text-xs font-medium text-slate-300">Speaker Separation (Diarization)</span>
+        </label>
+      </div>
+
+      <!-- Start Transcribe Button -->
+      <button id="transcribeBtn" disabled class="mt-4 w-full py-3.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 active:scale-[0.98] transition">
+        <svg id="transcribeIcon" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+        <span id="transcribeBtnText">Start Transcription</span>
+      </button>
+    </div>
+
+    <!-- 4. Transcription Progress & Loading Spinner -->
+    <div id="loadingCard" class="hidden bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center shadow-sm">
+      <div class="inline-block w-10 h-10 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin mb-3"></div>
+      <h3 class="text-sm font-semibold text-white">Transcribing Audio with Scribe v2...</h3>
+      <p class="text-xs text-slate-400 mt-1">Processing speech & generating SRT subtitles</p>
+    </div>
+
+    <!-- 5. Error Alert Box -->
+    <div id="errorCard" class="hidden bg-red-950/40 border border-red-500/30 text-red-200 rounded-2xl p-4 text-xs">
+      <div class="flex items-start gap-2.5">
+        <svg class="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <div class="flex-1">
+          <p id="errorMsg" class="font-medium text-red-300">An error occurred.</p>
+        </div>
+        <button id="closeErrorBtn" class="text-red-400 hover:text-white">✕</button>
+      </div>
+    </div>
+
+    <!-- 6. Results & Export Card -->
+    <div id="resultCard" class="hidden bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col space-y-3">
+      <!-- Header with audio info -->
+      <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+        <div>
+          <span class="text-xs font-bold text-white flex items-center gap-1.5">
+            Transcription Completed
+            <span class="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20">Success</span>
+          </span>
+          <span id="transcriptionMeta" class="text-[11px] text-slate-400">Duration: 00:00 • Words: 0</span>
+        </div>
+
+        <!-- Android Native Share -->
+        <button id="shareBtn" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white px-2.5 py-1.5 rounded-lg flex items-center gap-1 active:scale-95 transition" title="Share via Android">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+          </svg>
+          <span>Share</span>
+        </button>
+      </div>
+
+      <!-- Quick Export Action Buttons Row -->
+      <div class="grid grid-cols-3 gap-2">
+        <button id="downloadTxtBtn" class="py-2.5 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-300 text-xs font-semibold flex items-center justify-center gap-1 active:scale-95 transition border border-slate-700">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <span>Export .TXT</span>
+        </button>
+
+        <button id="downloadSrtBtn" class="py-2.5 px-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center justify-center gap-1 active:scale-95 transition shadow-sm">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+          </svg>
+          <span>Export .SRT</span>
+        </button>
+
+        <button id="copyTextBtn" class="py-2.5 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center justify-center gap-1 active:scale-95 transition border border-slate-700">
+          <svg id="copyIcon" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+          <span id="copyBtnText">Copy</span>
+        </button>
+      </div>
+
+      <!-- Result View Switcher -->
+      <div class="flex border-b border-slate-800 text-xs font-medium space-x-4 pt-1">
+        <button id="viewTabSegments" class="pb-2 border-b-2 border-indigo-500 text-indigo-400 font-bold transition">Diarized View</button>
+        <button id="viewTabText" class="pb-2 border-b-2 border-transparent text-slate-400 hover:text-white transition">Plain Text</button>
+        <button id="viewTabSrt" class="pb-2 border-b-2 border-transparent text-slate-400 hover:text-white transition">SRT Subtitles</button>
+      </div>
+
+      <!-- Result Content Display -->
+      <div class="relative bg-slate-950 rounded-xl p-3 max-h-80 overflow-y-auto border border-slate-800/80">
+        <!-- Segments View -->
+        <div id="contentSegments" class="space-y-3 selectable-text text-sm"></div>
+
+        <!-- Plain Text View -->
+        <div id="contentText" class="hidden selectable-text text-sm leading-relaxed text-slate-200 whitespace-pre-wrap"></div>
+
+        <!-- SRT View -->
+        <div id="contentSrt" class="hidden selectable-text font-mono text-xs leading-relaxed text-slate-300 whitespace-pre-wrap"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-5 shadow-2xl transition">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <span>ElevenLabs Settings</span>
+        </h3>
+        <button id="closeSettingsBtn" class="p-1 rounded-lg text-slate-400 hover:text-white">✕</button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
+            API Key (xi-api-key)
+          </label>
+          <input type="password" id="apiKeyInput" placeholder="sk_..." class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500">
+          <p class="text-[11px] text-slate-400 mt-1">
+            Saved securely in your browser's local storage.
+            <a href="https://elevenlabs.io/app/settings/api-keys" target="_blank" class="text-indigo-400 underline">Get Free API Key</a>
+          </p>
+        </div>
+
+        <div class="bg-slate-950 rounded-xl p-3 border border-slate-800 text-xs text-slate-400 space-y-1">
+          <p class="font-medium text-slate-300">💡 Free Tier Tips:</p>
+          <p>• 10,000 credits renewed every month.</p>
+          <p>• Pre-selecting Hindi/Bengali/English avoids wasting credits on language identification.</p>
+        </div>
+
+        <button id="saveApiKeyBtn" class="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-md transition">
+          Save Settings & Test Connection
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-slate-800 border border-slate-700 text-white text-xs font-semibold px-4 py-2.5 rounded-full shadow-lg opacity-0 transition-opacity duration-300 pointer-events-none">
+    Copied to clipboard!
+  </div>
+
+  <!-- Client-side Logic -->
+  <script>
+    // State management
+    const state = {
+      apiKey: localStorage.getItem('auscribe_api_key') || '',
+      selectedLang: 'en',
+      audioBlob: null,
+      audioFileName: '',
+      isRecording: false,
+      mediaRecorder: null,
+      audioChunks: [],
+      recordTimerInterval: null,
+      recordStartTime: 0,
+      activeTab: 'record', // 'record' or 'upload'
+      lastTranscription: null,
+      deferredInstallPrompt: null
+    };
+
+    // DOM Elements
+    const elements = {
+      creditCard: document.getElementById('creditCard'),
+      remainingCreditsVal: document.getElementById('remainingCreditsVal'),
+      usedPercentVal: document.getElementById('usedPercentVal'),
+      creditProgressBar: document.getElementById('creditProgressBar'),
+      resetDateText: document.getElementById('resetDateText'),
+      tierBadge: document.getElementById('tierBadge'),
+      refreshCreditsBtn: document.getElementById('refreshCreditsBtn'),
+      refreshIcon: document.getElementById('refreshIcon'),
+      selectedLangTag: document.getElementById('selectedLangTag'),
+      langBtns: document.querySelectorAll('.lang-btn'),
+      tabRecord: document.getElementById('tabRecord'),
+      tabUpload: document.getElementById('tabUpload'),
+      recordPanel: document.getElementById('recordPanel'),
+      uploadPanel: document.getElementById('uploadPanel'),
+      micBtn: document.getElementById('micBtn'),
+      micIcon: document.getElementById('micIcon'),
+      recordRing: document.getElementById('recordRing'),
+      recordTimer: document.getElementById('recordTimer'),
+      recordStatus: document.getElementById('recordStatus'),
+      recordedAudioControls: document.getElementById('recordedAudioControls'),
+      recordedAudioPlayer: document.getElementById('recordedAudioPlayer'),
+      discardRecordBtn: document.getElementById('discardRecordBtn'),
+      audioFileInput: document.getElementById('audioFileInput'),
+      uploadFileName: document.getElementById('uploadFileName'),
+      fileAudioPreview: document.getElementById('fileAudioPreview'),
+      fileAudioPlayer: document.getElementById('fileAudioPlayer'),
+      diarizeToggle: document.getElementById('diarizeToggle'),
+      transcribeBtn: document.getElementById('transcribeBtn'),
+      transcribeBtnText: document.getElementById('transcribeBtnText'),
+      loadingCard: document.getElementById('loadingCard'),
+      errorCard: document.getElementById('errorCard'),
+      errorMsg: document.getElementById('errorMsg'),
+      closeErrorBtn: document.getElementById('closeErrorBtn'),
+      resultCard: document.getElementById('resultCard'),
+      transcriptionMeta: document.getElementById('transcriptionMeta'),
+      downloadTxtBtn: document.getElementById('downloadTxtBtn'),
+      downloadSrtBtn: document.getElementById('downloadSrtBtn'),
+      copyTextBtn: document.getElementById('copyTextBtn'),
+      copyBtnText: document.getElementById('copyBtnText'),
+      shareBtn: document.getElementById('shareBtn'),
+      viewTabSegments: document.getElementById('viewTabSegments'),
+      viewTabText: document.getElementById('viewTabText'),
+      viewTabSrt: document.getElementById('viewTabSrt'),
+      contentSegments: document.getElementById('contentSegments'),
+      contentText: document.getElementById('contentText'),
+      contentSrt: document.getElementById('contentSrt'),
+      settingsModal: document.getElementById('settingsModal'),
+      openSettingsBtn: document.getElementById('openSettingsBtn'),
+      closeSettingsBtn: document.getElementById('closeSettingsBtn'),
+      apiKeyInput: document.getElementById('apiKeyInput'),
+      saveApiKeyBtn: document.getElementById('saveApiKeyBtn'),
+      installAppBtn: document.getElementById('installAppBtn'),
+      toast: document.getElementById('toast'),
+    };
+
+    // Initialize
+    window.addEventListener('DOMContentLoaded', () => {
+      // Register Service Worker for Android PWA
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(console.error);
+      }
+
+      if (state.apiKey) {
+        elements.apiKeyInput.value = state.apiKey;
+      }
+      fetchCredits();
+      setupEventListeners();
+    });
+
+    // PWA Install Prompt Handler for Android
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      state.deferredInstallPrompt = e;
+      elements.installAppBtn.classList.remove('hidden');
+    });
+
+    elements.installAppBtn.addEventListener('click', async () => {
+      if (state.deferredInstallPrompt) {
+        state.deferredInstallPrompt.prompt();
+        const choice = await state.deferredInstallPrompt.userChoice;
+        if (choice.outcome === 'accepted') {
+          elements.installAppBtn.classList.add('hidden');
+        }
+        state.deferredInstallPrompt = null;
+      }
+    });
+
+    // Toast helper
+    function showToast(msg) {
+      elements.toast.textContent = msg;
+      elements.toast.style.opacity = '1';
+      setTimeout(() => {
+        elements.toast.style.opacity = '0';
+      }, 2500);
+    }
+
+    // Headers helper for ElevenLabs API requests
+    function getRequestHeaders() {
+      const headers = {};
+      if (state.apiKey) {
+        headers['X-ElevenLabs-Key'] = state.apiKey;
+      }
+      return headers;
+    }
+
+    // Fetch credits & token usage
+    async function fetchCredits() {
+      elements.refreshIcon.classList.add('animate-spin');
+      try {
+        const res = await fetch('/api/subscription', {
+          headers: getRequestHeaders()
+        });
+        const data = await res.json();
+        
+        if (!res.ok) {
+          if (res.status === 401 && !state.apiKey) {
+            elements.remainingCreditsVal.textContent = 'Setup Key';
+            elements.usedPercentVal.textContent = 'API Key required';
+          } else {
+            console.warn(data.error);
+          }
+          return;
+        }
+
+        updateCreditUI(data);
+      } catch (err) {
+        console.error('Failed to fetch credits:', err);
+      } finally {
+        elements.refreshIcon.classList.remove('animate-spin');
+      }
+    }
+
+    function updateCreditUI(data) {
+      if (!data) return;
+      const remaining = data.remaining_credits ?? 0;
+      const total = data.character_limit ?? 10000;
+      const usedPct = data.used_percentage ?? 0;
+      
+      elements.remainingCreditsVal.textContent = remaining.toLocaleString();
+      elements.usedPercentVal.textContent = `${usedPct}% used`;
+      elements.creditProgressBar.style.width = `${Math.min(100, usedPct)}%`;
+      
+      if (remaining < 1500) {
+        elements.creditProgressBar.className = "h-full bg-red-500 rounded-full transition-all duration-500";
+      } else if (remaining < 4000) {
+        elements.creditProgressBar.className = "h-full bg-amber-500 rounded-full transition-all duration-500";
+      } else {
+        elements.creditProgressBar.className = "h-full bg-emerald-500 rounded-full transition-all duration-500";
+      }
+
+      elements.tierBadge.textContent = `Plan: ${(data.tier || 'Free').toUpperCase()}`;
+      
+      if (data.next_reset_unix) {
+        const resetDate = new Date(data.next_reset_unix * 1000);
+        const daysLeft = Math.max(0, Math.ceil((resetDate - new Date()) / (1000 * 60 * 60 * 24)));
+        elements.resetDateText.textContent = `Reset in ${daysLeft} days (${resetDate.toLocaleDateString()})`;
+      }
+    }
+
+    function setupEventListeners() {
+      // Language selection
+      elements.langBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          elements.langBtns.forEach(b => {
+            b.classList.remove('active', 'border-indigo-500', 'bg-indigo-600/20', 'text-white');
+            b.classList.add('border-slate-700', 'bg-slate-800/60', 'text-slate-300');
+          });
+          btn.classList.add('active', 'border-indigo-500', 'bg-indigo-600/20', 'text-white');
+          btn.classList.remove('border-slate-700', 'bg-slate-800/60', 'text-slate-300');
+          
+          state.selectedLang = btn.dataset.lang;
+          elements.selectedLangTag.textContent = `Code: ${state.selectedLang}`;
+        });
+      });
+
+      // Tab switcher
+      elements.tabRecord.addEventListener('click', () => switchTab('record'));
+      elements.tabUpload.addEventListener('click', () => switchTab('upload'));
+
+      // Microphone Recording
+      elements.micBtn.addEventListener('click', toggleRecording);
+      elements.discardRecordBtn.addEventListener('click', resetRecording);
+
+      // File upload
+      elements.audioFileInput.addEventListener('change', handleFileSelect);
+
+      // Refresh credits
+      elements.refreshCreditsBtn.addEventListener('click', fetchCredits);
+
+      // Start Transcription
+      elements.transcribeBtn.addEventListener('click', startTranscription);
+
+      // Error banner
+      elements.closeErrorBtn.addEventListener('click', () => {
+        elements.errorCard.classList.add('hidden');
+      });
+
+      // Settings modal
+      elements.openSettingsBtn.addEventListener('click', () => {
+        elements.apiKeyInput.value = state.apiKey;
+        elements.settingsModal.classList.remove('hidden');
+      });
+      elements.closeSettingsBtn.addEventListener('click', () => {
+        elements.settingsModal.classList.add('hidden');
+      });
+      elements.saveApiKeyBtn.addEventListener('click', () => {
+        const key = elements.apiKeyInput.value.trim();
+        state.apiKey = key;
+        localStorage.setItem('auscribe_api_key', key);
+        elements.settingsModal.classList.add('hidden');
+        showToast('Settings saved');
+        fetchCredits();
+      });
+
+      // Result views
+      elements.viewTabSegments.addEventListener('click', () => switchResultView('segments'));
+      elements.viewTabText.addEventListener('click', () => switchResultView('text'));
+      elements.viewTabSrt.addEventListener('click', () => switchResultView('srt'));
+
+      // Export Buttons
+      elements.downloadTxtBtn.addEventListener('click', downloadTxt);
+      elements.downloadSrtBtn.addEventListener('click', downloadSrt);
+      elements.copyTextBtn.addEventListener('click', copyTranscript);
+      elements.shareBtn.addEventListener('click', shareTranscript);
+    }
+
+    function switchTab(tab) {
+      state.activeTab = tab;
+      if (tab === 'record') {
+        elements.tabRecord.classList.add('bg-indigo-600', 'text-white');
+        elements.tabRecord.classList.remove('text-slate-400');
+        elements.tabUpload.classList.remove('bg-indigo-600', 'text-white');
+        elements.tabUpload.classList.add('text-slate-400');
+        elements.recordPanel.classList.remove('hidden');
+        elements.uploadPanel.classList.add('hidden');
+        updateTranscribeBtnState(!!state.audioBlob);
+      } else {
+        elements.tabUpload.classList.add('bg-indigo-600', 'text-white');
+        elements.tabUpload.classList.remove('text-slate-400');
+        elements.tabRecord.classList.remove('bg-indigo-600', 'text-white');
+        elements.tabRecord.classList.add('text-slate-400');
+        elements.uploadPanel.classList.remove('hidden');
+        elements.recordPanel.classList.add('hidden');
+        updateTranscribeBtnState(!!elements.audioFileInput.files[0]);
+      }
+    }
+
+    function updateTranscribeBtnState(hasAudio) {
+      elements.transcribeBtn.disabled = !hasAudio;
+    }
+
+    // Audio Recording Logic
+    async function toggleRecording() {
+      if (!state.isRecording) {
+        // Start recording
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          state.mediaRecorder = new MediaRecorder(stream);
+          state.audioChunks = [];
+
+          state.mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) state.audioChunks.push(e.data);
+          };
+
+          state.mediaRecorder.onstop = () => {
+            const mimeType = state.mediaRecorder.mimeType || 'audio/webm';
+            state.audioBlob = new Blob(state.audioChunks, { type: mimeType });
+            state.audioFileName = `recording_${Date.now()}.${mimeType.includes('mp4') ? 'm4a' : 'webm'}`;
+            
+            const audioUrl = URL.createObjectURL(state.audioBlob);
+            elements.recordedAudioPlayer.src = audioUrl;
+            elements.recordedAudioControls.classList.remove('hidden');
+            updateTranscribeBtnState(true);
+            
+            // Stop mic tracks
+            stream.getTracks().forEach(t => t.stop());
+          };
+
+          state.mediaRecorder.start();
+          state.isRecording = true;
+          state.recordStartTime = Date.now();
+          
+          elements.micBtn.classList.add('bg-red-600', 'border-red-500');
+          elements.micIcon.classList.add('text-white');
+          elements.recordRing.classList.remove('hidden');
+          elements.recordStatus.textContent = 'Recording in progress... Tap to finish';
+          elements.recordedAudioControls.classList.add('hidden');
+          
+          state.recordTimerInterval = setInterval(updateTimerDisplay, 500);
+        } catch (err) {
+          showError('Microphone permission denied or unsupported in this browser: ' + err.message);
+        }
+      } else {
+        // Stop recording
+        state.isRecording = false;
+        clearInterval(state.recordTimerInterval);
+        if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
+          state.mediaRecorder.stop();
+        }
+        elements.micBtn.classList.remove('bg-red-600', 'border-red-500');
+        elements.micIcon.classList.remove('text-white');
+        elements.recordRing.classList.add('hidden');
+        elements.recordStatus.textContent = 'Recording finished! Ready to transcribe.';
+      }
+    }
+
+    function updateTimerDisplay() {
+      const elapsed = Math.floor((Date.now() - state.recordStartTime) / 1000);
+      const mins = Math.floor(elapsed / 60);
+      const secs = elapsed % 60;
+      elements.recordTimer.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    function resetRecording() {
+      state.audioBlob = null;
+      state.audioFileName = '';
+      elements.recordTimer.textContent = '00:00';
+      elements.recordedAudioControls.classList.add('hidden');
+      elements.recordStatus.textContent = 'Tap microphone to start recording';
+      updateTranscribeBtnState(false);
+    }
+
+    // File Selection Logic
+    function handleFileSelect(e) {
+      const file = e.target.files[0];
+      if (file) {
+        state.audioFileName = file.name;
+        state.audioBlob = file;
+        elements.uploadFileName.textContent = file.name;
+        
+        const audioUrl = URL.createObjectURL(file);
+        elements.fileAudioPlayer.src = audioUrl;
+        elements.fileAudioPreview.classList.remove('hidden');
+        updateTranscribeBtnState(true);
+      }
+    }
+
+    // Transcription Execution
+    async function startTranscription() {
+      let fileToSend = null;
+      if (state.activeTab === 'record') {
+        if (!state.audioBlob) return showError('Please record audio first.');
+        fileToSend = new File([state.audioBlob], state.audioFileName || 'recording.webm', { type: state.audioBlob.type });
+      } else {
+        fileToSend = elements.audioFileInput.files[0];
+        if (!fileToSend) return showError('Please select an audio file first.');
+      }
+
+      // Check API Key
+      if (!state.apiKey) {
+        // Prompt user to enter key
+        elements.settingsModal.classList.remove('hidden');
+        return showError('Please enter your ElevenLabs API Key in Settings to continue.');
+      }
+
+      // Prepare UI for progress
+      elements.errorCard.classList.add('hidden');
+      elements.loadingCard.classList.remove('hidden');
+      elements.resultCard.classList.add('hidden');
+      elements.transcribeBtn.disabled = true;
+      elements.transcribeBtnText.textContent = 'Transcribing...';
+
+      const formData = new FormData();
+      formData.append('audio', fileToSend);
+      formData.append('language_code', state.selectedLang);
+      formData.append('diarize', elements.diarizeToggle.checked ? 'true' : 'false');
+      formData.append('tag_audio_events', 'true');
+
+      try {
+        const response = await fetch('/api/transcribe', {
+          method: 'POST',
+          headers: getRequestHeaders(),
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || `HTTP error ${response.status}`);
+        }
+
+        state.lastTranscription = data;
+        displayTranscriptionResults(data);
+
+        // Update credit UI if server returned updated subscription
+        if (data.subscription) {
+          updateCreditUI(data.subscription);
+        } else {
+          fetchCredits();
+        }
+
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        elements.loadingCard.classList.add('hidden');
+        elements.transcribeBtn.disabled = false;
+        elements.transcribeBtnText.textContent = 'Start Transcription';
+      }
+    }
+
+    function displayTranscriptionResults(data) {
+      elements.transcriptionMeta.textContent = `Duration: ${data.duration_formatted} • Words: ${data.word_count} • Lang: ${data.language_code.toUpperCase()}`;
+
+      // 1. Populate Speaker Segments
+      elements.contentSegments.innerHTML = '';
+      if (data.segments && data.segments.length > 0) {
+        data.segments.forEach(seg => {
+          const segEl = document.createElement('div');
+          segEl.className = 'p-2.5 rounded-xl bg-slate-900 border border-slate-800/80 hover:border-slate-700 transition';
+          segEl.innerHTML = `
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-bold text-indigo-400 flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+                ${seg.speaker}
+              </span>
+              <span class="text-[10px] font-mono text-slate-500">${seg.start_formatted}</span>
+            </div>
+            <p class="text-slate-200 text-xs leading-relaxed">${escapeHtml(seg.text)}</p>
+          `;
+          elements.contentSegments.appendChild(segEl);
+        });
+      } else {
+        elements.contentSegments.innerHTML = `<p class="text-slate-300 text-xs">${escapeHtml(data.text)}</p>`;
+      }
+
+      // 2. Populate Plain Text
+      elements.contentText.textContent = data.text || '(No text detected)';
+
+      // 3. Populate SRT Subtitles
+      elements.contentSrt.textContent = data.srt || '(No subtitle cues)';
+
+      // Show Result Card & switch to Segments tab
+      switchResultView('segments');
+      elements.resultCard.classList.remove('hidden');
+      elements.resultCard.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function switchResultView(view) {
+      const tabs = [elements.viewTabSegments, elements.viewTabText, elements.viewTabSrt];
+      tabs.forEach(t => {
+        t.classList.remove('border-indigo-500', 'text-indigo-400', 'font-bold');
+        t.classList.add('border-transparent', 'text-slate-400');
+      });
+
+      elements.contentSegments.classList.add('hidden');
+      elements.contentText.classList.add('hidden');
+      elements.contentSrt.classList.add('hidden');
+
+      if (view === 'segments') {
+        elements.viewTabSegments.classList.add('border-indigo-500', 'text-indigo-400', 'font-bold');
+        elements.viewTabSegments.classList.remove('border-transparent', 'text-slate-400');
+        elements.contentSegments.classList.remove('hidden');
+      } else if (view === 'text') {
+        elements.viewTabText.classList.add('border-indigo-500', 'text-indigo-400', 'font-bold');
+        elements.viewTabText.classList.remove('border-transparent', 'text-slate-400');
+        elements.contentText.classList.remove('hidden');
+      } else if (view === 'srt') {
+        elements.viewTabSrt.classList.add('border-indigo-500', 'text-indigo-400', 'font-bold');
+        elements.viewTabSrt.classList.remove('border-transparent', 'text-slate-400');
+        elements.contentSrt.classList.remove('hidden');
+      }
+    }
+
+    // Export Helpers
+    function downloadTxt() {
+      if (!state.lastTranscription) return;
+      const textToSave = state.lastTranscription.diarized_text || state.lastTranscription.text;
+      downloadFile(textToSave, `transcript_${state.selectedLang}_${Date.now()}.txt`, 'text/plain;charset=utf-8');
+      showToast('TXT file downloaded');
+    }
+
+    function downloadSrt() {
+      if (!state.lastTranscription) return;
+      const srtToSave = state.lastTranscription.srt || '';
+      downloadFile(srtToSave, `subtitles_${state.selectedLang}_${Date.now()}.srt`, 'application/x-subrip;charset=utf-8');
+      showToast('SRT file downloaded');
+    }
+
+    function downloadFile(content, fileName, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    async function copyTranscript() {
+      if (!state.lastTranscription) return;
+      const text = state.lastTranscription.text;
+      try {
+        await navigator.clipboard.writeText(text);
+        elements.copyBtnText.textContent = 'Copied!';
+        showToast('Transcript copied to clipboard!');
+        setTimeout(() => { elements.copyBtnText.textContent = 'Copy'; }, 2000);
+      } catch (err) {
+        showToast('Copy failed, please select text manually');
+      }
+    }
+
+    async function shareTranscript() {
+      if (!state.lastTranscription) return;
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: `AuScribe Transcript (${state.selectedLang.toUpperCase()})`,
+            text: state.lastTranscription.text
+          });
+        } catch (err) {
+          if (err.name !== 'AbortError') copyTranscript();
+        }
+      } else {
+        copyTranscript();
+      }
+    }
+
+    function showError(msg) {
+      elements.errorMsg.textContent = msg;
+      elements.errorCard.classList.remove('hidden');
+      elements.errorCard.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/[&<>"']/g, function(m) {
+        return {
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#039;'
+        }[m];
+      });
+    }
+  </script>
+</body>
+</html>
