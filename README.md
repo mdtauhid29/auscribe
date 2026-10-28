@@ -1,5 +1,8 @@
 # AuScribe 🎙️
 
+[![GitHub Repository](https://img.shields.io/badge/GitHub-mdtauhid29%2Fauscribe-indigo?logo=github)](https://github.com/mdtauhid29/auscribe)
+[![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg)](LICENSE)
+
 A lightweight, multilingual audio transcription tool built for **Android** and desktop using the **ElevenLabs Scribe API** (Free Tier: 10,000 credits/month).
 
 Optimized for **English (`en`)**, **Hindi (`hi`)**, and **Bengali (`bn`)** with one-tap export to **TXT** and **SRT (subtitles)** and live credit token tracking.
@@ -40,9 +43,9 @@ Run the entire app directly on your Android phone without needing a computer:
    ```bash
    pkg update && pkg install python git -y
    ```
-3. Clone or copy this repository into Termux:
+3. Clone the repository into Termux:
    ```bash
-   git clone <your-repo-url> auscribe
+   git clone https://github.com/mdtauhid29/auscribe.git
    cd auscribe
    ```
 4. Install dependencies:
